@@ -34,11 +34,23 @@ That will:
 - create `src/cookiebanner/styles.css` if it is missing
 - add a starter configuration block with placeholder values
 
-### 3. Edit the generated CSS
+### 3. Import the generated CSS in your layout
 
-Open `src/cookiebanner/styles.css` in your project and customize the banner or modal visually. The package does not inject CSS through JavaScript, so this file is the single source of truth for styling.
+**This step is required.** The package does not inject CSS through JavaScript — `src/cookiebanner/styles.css` is the single source of truth for styling, but it only takes effect once it's imported somewhere that renders on every page (usually your main layout). Without this import the banner still renders in the DOM, but with no styling: no fixed positioning, no colors, no transitions, so in practice it's invisible or buried at the bottom of the page.
 
-### 4. Run your Astro app
+Add this near the top of your main layout (e.g. `src/layouts/BaseLayout.astro` or `src/layouts/MainLayout.astro`):
+
+```astro
+---
+import "../cookiebanner/styles.css";
+---
+```
+
+### 4. Customize the CSS (optional)
+
+Open `src/cookiebanner/styles.css` and edit it to match your site's look.
+
+### 5. Run your Astro app
 
 ```bash
 npm run dev

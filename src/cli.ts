@@ -25,6 +25,63 @@ function findAstroConfig(): string | null {
   return null;
 }
 
+function walkAstroFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  const found: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...walkAstroFiles(fullPath));
+    } else if (entry.isFile() && entry.name.endsWith(".astro")) {
+      found.push(fullPath);
+    }
+  }
+  return found;
+}
+
+/**
+ * Layout file name isn't standardized across Astro projects (BaseLayout,
+ * MainLayout, Layout, etc.), so every .astro file under src/layouts is
+ * treated as a candidate rather than assuming a single fixed name.
+ */
+function findLayoutFiles(): string[] {
+  return walkAstroFiles(path.join(CWD, "src", "layouts"));
+}
+
+function layoutImportsCss(source: string): boolean {
+  return /cookiebanner\/styles\.css/.test(source);
+}
+
+function relativeCssImportPath(layoutFile: string, cssFile: string): string {
+  const rel = path
+    .relative(path.dirname(layoutFile), cssFile)
+    .split(path.sep)
+    .join("/");
+  return rel.startsWith(".") ? rel : `./${rel}`;
+}
+
+function insertCssImport(layoutSource: string, importPath: string): string {
+  const importLine = `import "${importPath}"; // astro-consent:css`;
+  const frontmatterOpen = layoutSource.match(/^---\r?\n/);
+  if (frontmatterOpen) {
+    const insertAt = frontmatterOpen[0].length;
+    return (
+      layoutSource.slice(0, insertAt) +
+      importLine +
+      "\n" +
+      layoutSource.slice(insertAt)
+    );
+  }
+  return `---\n${importLine}\n---\n${layoutSource}`;
+}
+
+function removeCssImport(layoutSource: string): string {
+  return layoutSource.replace(
+    /^import\s+["'][^"']*cookiebanner\/styles\.css["'];?\s*\/\/ astro-consent:css\r?\n/m,
+    ""
+  );
+}
+
 function exitWith(message: string, code = 1): never {
   console.error(`\n❌ ${message}\n`);
   process.exit(code);
@@ -138,6 +195,14 @@ if (command === "remove") {
   const cssFile = path.join(CWD, "src", "cookiebanner", "styles.css");
   if (!isDryRun && fs.existsSync(cssFile)) fs.unlinkSync(cssFile);
 
+  for (const layoutFile of findLayoutFiles()) {
+    const layoutSource = fs.readFileSync(layoutFile, "utf8");
+    const stripped = removeCssImport(layoutSource);
+    if (stripped !== layoutSource && !isDryRun) {
+      fs.writeFileSync(layoutFile, stripped, "utf8");
+    }
+  }
+
   console.log(isDryRun ? "\n🧪 Dry run: astro-consent would be removed\n" : "\n🧹 astro-consent fully removed\n");
   process.exit(0);
 }
@@ -145,7 +210,6 @@ if (command === "remove") {
 if (command === "doctor") {
   const { configPath, source } = readConfig();
   const cssFile = path.join(CWD, "src", "cookiebanner", "styles.css");
-  const layoutPath = path.join(CWD, "src", "layouts", "BaseLayout.astro");
   const findings: Array<{ issue: string; fix: string }> = [];
   const checks: Array<{ label: string; ok: boolean; detail: string }> = [];
 
@@ -199,34 +263,37 @@ if (command === "doctor") {
     });
   }
 
-  let hasLayoutImport = false;
-  if (fs.existsSync(layoutPath)) {
-    const layoutSource = fs.readFileSync(layoutPath, "utf8");
-    hasLayoutImport = layoutSource.includes(`../cookiebanner/styles.css`);
+  const layoutFiles = findLayoutFiles();
+  if (layoutFiles.length === 0) {
+    checks.push({
+      label: "Layout import",
+      ok: false,
+      detail: "No .astro files found under src/layouts"
+    });
+    findings.push({
+      issue: "No layout files found under src/layouts",
+      fix: "Create a shared layout (e.g. src/layouts/MainLayout.astro) that imports \"../cookiebanner/styles.css\", or add the import to whatever component wraps every page."
+    });
+  } else {
+    const missingImport = layoutFiles.filter(
+      file => !layoutImportsCss(fs.readFileSync(file, "utf8"))
+    );
+    const hasLayoutImport = missingImport.length === 0;
     checks.push({
       label: "Layout import",
       ok: hasLayoutImport,
       detail: hasLayoutImport
-        ? "BaseLayout imports ../cookiebanner/styles.css"
-        : "BaseLayout is missing the stylesheet import"
+        ? `${layoutFiles.length} layout file(s) import the astro-consent stylesheet`
+        : `${missingImport.length} of ${layoutFiles.length} layout file(s) are missing the stylesheet import`
     });
 
-    if (!hasLayoutImport) {
+    for (const file of missingImport) {
+      const relPath = path.relative(CWD, file);
       findings.push({
-        issue: "BaseLayout.astro does not import ../cookiebanner/styles.css",
-        fix: "Add `import \"../cookiebanner/styles.css\";` near the top of `src/layouts/BaseLayout.astro`."
+        issue: `${relPath} does not import the astro-consent stylesheet`,
+        fix: `Add \`import "${relativeCssImportPath(file, cssFile)}";\` near the top of ${relPath}, or run \`npx astro-consent init\` to wire it automatically. Without this, the banner still renders but with no styling.`
       });
     }
-  } else {
-    checks.push({
-      label: "Layout import",
-      ok: false,
-      detail: "src/layouts/BaseLayout.astro is missing"
-    });
-    findings.push({
-      issue: "src/layouts/BaseLayout.astro is missing",
-      fix: "Create or update a shared layout to import `../cookiebanner/styles.css`."
-    });
   }
 
   const summary = {
@@ -262,7 +329,10 @@ if (command === "doctor") {
 if (command === "status") {
   const { source } = readConfig();
   const cssFile = path.join(CWD, "src", "cookiebanner", "styles.css");
-  const layoutPath = path.join(CWD, "src", "layouts", "BaseLayout.astro");
+  const layoutFiles = findLayoutFiles();
+  const cssWiredInLayout = layoutFiles.some(file =>
+    layoutImportsCss(fs.readFileSync(file, "utf8"))
+  );
   const linked = fs.existsSync(path.join(CWD, "node_modules", "astro-consent"));
   const consentKeyMatch = source.match(/storageKey:\s*["']([^"']+)["']/);
   const consentKey = consentKeyMatch?.[1] ?? "astro-consent";
@@ -271,6 +341,7 @@ if (command === "status") {
       source.includes(`from "astro-consent"`) &&
       source.includes("astroConsent("),
     cssExists: fs.existsSync(cssFile),
+    cssWiredInLayout,
     linkedInstall: linked,
     consentStorageKey: consentKey,
     consentStored: "browser-only; inspect via window.astroConsent.get()"
@@ -284,6 +355,7 @@ if (command === "status") {
   console.log("\nastro-consent status");
   console.log(`${report.configWired ? "✅" : "❌"} Config wiring`);
   console.log(`${report.cssExists ? "✅" : "❌"} CSS file exists`);
+  console.log(`${report.cssWiredInLayout ? "✅" : "❌"} CSS imported in a layout`);
   console.log(`${report.linkedInstall ? "✅" : "❌"} Linked install present`);
   console.log(`ℹ️  Consent storage key: ${report.consentStorageKey}`);
   console.log(`ℹ️  Consent state: ${report.consentStored}`);
@@ -303,7 +375,7 @@ if (command !== "init" && command !== "install") {
 const { configPath, source: original } = readConfig();
 let source = original;
 
-ensureCssFile(isDryRun);
+const cssFile = ensureCssFile(isDryRun);
 
 if (!source.includes(`from "astro-consent"`)) {
   source = `import astroConsent from "astro-consent";\n${source}`;
@@ -318,6 +390,35 @@ if (!source.includes("astro-consent:start")) {
 
 if (!isDryRun) {
   fs.writeFileSync(configPath, source, "utf8");
+}
+
+const layoutFiles = findLayoutFiles();
+if (layoutFiles.length === 0) {
+  console.log(
+    "⚠️  No layout files found under src/layouts — add `import \"../cookiebanner/styles.css\";` to whatever component wraps every page, or the banner will render unstyled."
+  );
+} else {
+  for (const layoutFile of layoutFiles) {
+    const layoutSource = fs.readFileSync(layoutFile, "utf8");
+    if (layoutImportsCss(layoutSource)) continue;
+
+    const importPath = relativeCssImportPath(layoutFile, cssFile);
+    const relLayoutPath = path.relative(CWD, layoutFile);
+
+    if (!isDryRun) {
+      fs.writeFileSync(
+        layoutFile,
+        insertCssImport(layoutSource, importPath),
+        "utf8"
+      );
+    }
+
+    console.log(
+      isDryRun
+        ? `🧪 Dry run: would add stylesheet import to ${relLayoutPath}`
+        : `🎨 Added stylesheet import to ${relLayoutPath}`
+    );
+  }
 }
 
 console.log(

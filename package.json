@@ -1,6 +1,6 @@
 {
   "name": "astro-consent",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "A privacy-first, GDPR-compliant cookie consent banner for Astro with a built-in preferences modal, zero dependencies, and full theme control.",
   "type": "module",
   "author": {
@@ -35,6 +35,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.cli.json && node -e \"const fs=require('fs');const path=require('path');fs.renameSync('dist/cli.js','dist/cli.cjs');fs.renameSync('dist/templates/cssTemplate.js','dist/templates/cssTemplate.cjs');let s=fs.readFileSync('dist/cli.cjs','utf8');s=s.replace('./templates/cssTemplate.js','./templates/cssTemplate.cjs');fs.writeFileSync('dist/cli.cjs',s);fs.chmodSync('dist/cli.cjs',0o755);\"",
+    "pretest": "npm run build",
     "test": "vitest run"
   },
   "keywords": [

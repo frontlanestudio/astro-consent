@@ -4,6 +4,20 @@ All notable changes to `astro-consent` will be documented in this file.
 
 The format follows a simple Keep a Changelog style, with semantic versioning.
 
+## [2.1.1] - 2026-08-25
+
+### Fixed
+
+- `init`, `doctor`, `status`, and `remove` no longer hardcode `src/layouts/BaseLayout.astro`. Layout file names aren't standardized across Astro projects, so previously the CLI silently failed to wire up (or even detect) the required stylesheet import on any project using a differently named layout (e.g. `MainLayout.astro`). All `.astro` files under `src/layouts` are now treated as candidates:
+  - `init` automatically inserts `import "../cookiebanner/styles.css";` into every layout file that's missing it
+  - `doctor` reports per-file findings instead of a single pass/fail against one fixed filename
+  - `remove` strips only the marker-tagged import it added, leaving unrelated imports untouched
+- Without this fix, the consent banner would still render in the DOM but with no styling applied — no fixed positioning, no colors, no transitions — making it easy to miss entirely on real projects with non-standard layout names.
+
+### Changed
+
+- README Quick Start now has an explicit, required step for importing `src/cookiebanner/styles.css` into your layout, instead of only mentioning it as an optional customization step
+
 ## [2.1.0] - 2026-08-25
 
 ### Added
