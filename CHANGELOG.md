@@ -4,6 +4,20 @@ All notable changes to `astro-consent` will be documented in this file.
 
 The format follows a simple Keep a Changelog style, with semantic versioning.
 
+## [2.1.0] - 2026-08-25
+
+### Added
+
+- Support for Astro 7 as a peer dependency, alongside the existing Astro 4, 5, and 6 support
+- Unit test suite (via Vitest) covering the integration's hook wiring and the config-merge logic
+- `npm test` script
+- License section in the README
+
+### Changed
+
+- Extracted the user-config merge logic in `loadConfig.ts` into a standalone, independently testable `mergeUserConfig` function
+- Tightened the user-config input types so nested `consent` and `categories` overrides are properly optional instead of requiring every field
+
 ## [2.0.0] - 2026-04-01
 
 ### Breaking

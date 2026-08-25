@@ -10,7 +10,7 @@
 - Focus trapping, `Escape` to close, and focus return for the overlay
 - CLI setup, removal, and diagnostics commands
 - TypeScript support
-- Compatibility with Astro 4, 5, and 6
+- Compatibility with Astro 4, 5, 6, and 7
 
 ## Quick Start
 
@@ -299,3 +299,16 @@ The design is intentionally simple:
 - the CLI wires setup and removal cleanly
 
 That separation keeps the plugin predictable, easier to debug, and safer to customise.
+
+## Testing
+
+The integration and config-merging logic are covered by unit tests. To run them locally:
+
+```bash
+npm install
+npm test
+```
+
+## License
+
+MIT © [Velohost UK Limited](https://velohost.co.uk/). See [LICENSE.md](./LICENSE.md) for the full text.

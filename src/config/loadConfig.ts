@@ -2,8 +2,19 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { CookieBannerConfig } from "../types/config.js";
+import type { CookieBannerConfig, CookieCategory } from "../types/config.js";
 import { DEFAULT_CONFIG } from "./defaults.js";
+
+/**
+ * Shape of a user-authored config file. Every field, including nested
+ * ones, is optional since the user may only want to override a subset.
+ */
+export interface UserConfigInput {
+  siteName?: string;
+  policyUrl?: string;
+  consent?: Partial<CookieBannerConfig["consent"]>;
+  categories?: Record<string, Partial<CookieCategory>>;
+}
 
 /**
  * Safely loads the user config file and merges it with defaults.
@@ -20,7 +31,7 @@ export async function loadUserConfig(
     "config.ts"
   );
 
-  let userConfig: Partial<CookieBannerConfig> = {};
+  let userConfig: UserConfigInput = {};
 
   try {
     const stat = fs.statSync(configPath);
@@ -38,28 +49,40 @@ export async function loadUserConfig(
     );
   }
 
-  return {
-    siteName: userConfig.siteName ?? DEFAULT_CONFIG.siteName,
+  return mergeUserConfig(userConfig, DEFAULT_CONFIG);
+}
 
-    policyUrl: userConfig.policyUrl ?? DEFAULT_CONFIG.policyUrl,
+/**
+ * Merge a partial user config with defaults.
+ * Pulled out of loadUserConfig so the merge behavior can be
+ * unit-tested without exercising the dynamic file import.
+ */
+export function mergeUserConfig(
+  userConfig: UserConfigInput,
+  defaults: CookieBannerConfig = DEFAULT_CONFIG
+): CookieBannerConfig {
+  return {
+    siteName: userConfig.siteName ?? defaults.siteName,
+
+    policyUrl: userConfig.policyUrl ?? defaults.policyUrl,
 
     consent: {
       enabled:
         userConfig.consent?.enabled ??
-        DEFAULT_CONFIG.consent.enabled,
+        defaults.consent.enabled,
 
       days:
         userConfig.consent?.days ??
-        DEFAULT_CONFIG.consent.days,
+        defaults.consent.days,
 
       storageKey:
         userConfig.consent?.storageKey ??
-        DEFAULT_CONFIG.consent.storageKey
+        defaults.consent.storageKey
     },
 
     categories: mergeCategories(
       userConfig.categories,
-      DEFAULT_CONFIG.categories
+      defaults.categories
     )
   };
 }
@@ -71,7 +94,7 @@ export async function loadUserConfig(
  * - Custom categories are supported
  */
 function mergeCategories(
-  userCategories: CookieBannerConfig["categories"] | undefined,
+  userCategories: Record<string, Partial<CookieCategory>> | undefined,
   defaultCategories: CookieBannerConfig["categories"]
 ): CookieBannerConfig["categories"] {
   const merged: CookieBannerConfig["categories"] = {};
@@ -89,6 +112,7 @@ function mergeCategories(
     for (const key of Object.keys(userCategories)) {
       if (!merged[key]) {
         merged[key] = {
+          label: userCategories[key].label ?? key,
           ...userCategories[key],
           enabled: userCategories[key].enabled ?? false
         };
