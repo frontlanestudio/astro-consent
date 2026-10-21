@@ -8,13 +8,13 @@
     "url": "https://velohost.co.uk"
   },
   "license": "MIT",
-  "homepage": "https://velohost.co.uk/",
+  "homepage": "https://github.com/frontlanestudio/astro-consent",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/velohost/astro-consent.git"
+    "url": "git+https://github.com/frontlanestudio/astro-consent.git"
   },
   "bugs": {
-    "url": "https://github.com/velohost/astro-consent/issues"
+    "url": "https://github.com/frontlanestudio/astro-consent/issues"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
